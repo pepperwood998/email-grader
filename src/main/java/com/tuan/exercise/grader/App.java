@@ -45,6 +45,7 @@ public class App {
             
             mailHandler.downloadInboxZips(store, subjectRegex, srcBaseDir);
             mailHandler.extractAll(srcBaseDir, destBaseDir);
+            mailHandler.grade();
             
             store.close();
         } catch (MessagingException e) {

@@ -1,5 +1,6 @@
 package com.tuan.exercise.grader.mail;
 
+import java.io.BufferedReader;
 import java.io.DataInputStream;
 import java.io.File;
 import java.io.FileInputStream;
@@ -7,6 +8,7 @@ import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.util.Properties;
 import java.util.regex.Pattern;
@@ -23,11 +25,15 @@ import javax.mail.Part;
 import javax.mail.Session;
 import javax.mail.Store;
 import javax.mail.internet.InternetAddress;
+import javax.mail.internet.MimeMessage;
+
+import com.sun.mail.smtp.SMTPTransport;
+import com.tuan.exercise.grader.util.AnswerUtil;
 
 public class MailHandler {
 
-    private final String username;
-    private final String password;
+    private final String USERNAME;
+    private final String PASSWORD;
 
     private static final String HOST = "imap.gmail.com";
     private static final String STORE_TYPE = "imaps";
@@ -38,8 +44,8 @@ public class MailHandler {
     private static final int FILE_BUF = 1024;
 
     public MailHandler(String username, String password) {
-        this.username = username;
-        this.password = password;
+        this.USERNAME = username;
+        this.PASSWORD = password;
     }
 
     public Store connect() throws MessagingException {
@@ -52,7 +58,7 @@ public class MailHandler {
         // get session and connect to store
         Session mailSession = Session.getDefaultInstance(props);
         Store store = mailSession.getStore();
-        store.connect(HOST, this.username, this.password);
+        store.connect(HOST, this.USERNAME, this.PASSWORD);
 
         return store;
     }
@@ -93,11 +99,11 @@ public class MailHandler {
             // dealing with attachments only
             if (Part.ATTACHMENT.equalsIgnoreCase(bodyPart.getDisposition()) && bodyPart.getFileName() != null) {
                 String fileFullname = bodyPart.getFileName();
-                String fileExt = fileFullname.substring(fileFullname.lastIndexOf('.'));
-                if (!ext.equals(fileExt))
+                int dotInd = fileFullname.lastIndexOf('.');
+                if (dotInd < 0 || !ext.equals(fileFullname.substring(dotInd)))
                     continue;
 
-                String savedFileName = String.format("%s_%s", from, fileFullname);
+                String savedFileName = String.format("%s-%s", from, fileFullname);
                 File download = new File(String.format("%s%s%s", destDirName, File.separator, savedFileName));
                 InputStream netIn = bodyPart.getInputStream();
                 try (OutputStream fileOut = new FileOutputStream(download)) {
@@ -140,7 +146,7 @@ public class MailHandler {
         String destDirPath = new StringBuilder()
                 .append(destBaseDir)
                 .append(File.separator)
-                .append(compFileFullname.substring(0, compFileFullname.lastIndexOf('.')))
+                .append(compFileFullname.substring(0, compFileFullname.indexOf('-')))
                 .toString();
 
         File destDir = new File(destDirPath);
@@ -174,6 +180,78 @@ public class MailHandler {
         } catch (FileNotFoundException e) {
             e.printStackTrace();
         } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public void grade() throws IOException {
+        int testCaseMonth = 2;
+        int testCaseyear = 2020;
+        String baseDirName = "./output/extracted";
+        String appName = "test_pkg/DemoApp";
+        File baseDir = new File(baseDirName);
+        String[] studentDirNames = baseDir.list((file, fileName) -> file.isDirectory());
+
+        for (String studentAddr : studentDirNames) {
+            System.out.println("Marking " + studentAddr);
+            String classPath = new StringBuilder()
+                    .append(baseDirName)
+                    .append(File.separator)
+                    .append(studentAddr).toString();
+            String answerFilePath = new StringBuilder()
+                    .append(classPath)
+                    .append(File.separator)
+                    .append("test_pkg")
+                    .append(File.separator)
+                    .append("DemoApp.java").toString();
+            
+            Process compileProc = Runtime.getRuntime().exec(String.format("javac %s", answerFilePath));
+            try {
+                int compileStat = compileProc.waitFor();
+                if (compileStat == 0) {
+                    Process runProc = Runtime.getRuntime().exec(String.format("java -cp %s %s %d %d",
+                            classPath, appName, testCaseMonth, testCaseyear));
+
+                    BufferedReader reader = new BufferedReader(new InputStreamReader(runProc.getInputStream()));
+                    String studentAns = reader.readLine();
+                    System.out.println("Finished marking " + studentAddr);
+                    int correctAns = AnswerUtil.getDays(testCaseMonth, testCaseyear);
+                    if (Integer.valueOf(studentAns) == correctAns) {
+                        sendResult(studentAddr, 10);
+                    } else {
+                        sendResult(studentAddr, 0);
+                    }
+                }
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    private void sendResult(String studentAddr, int grade) {
+        Properties props = System.getProperties();
+        props.setProperty("mail.smtp.host", "smtp.gmail.com");
+        props.put("mail.smtp.auth", "true");
+        props.put("mail.smtp.port", "465");
+        props.put("mail.smtp.starttls.enable", "true");
+        Session session = Session.getDefaultInstance(props);
+
+        try {
+            MimeMessage message = new MimeMessage(session);
+            message.setFrom(new InternetAddress(USERNAME));
+            message.addRecipient(Message.RecipientType.TO, new InternetAddress(studentAddr));
+            message.setSubject("Final Exam Grade");
+            message.setText(new StringBuilder()
+                    .append("Your mark: ")
+                    .append(grade).toString());
+
+            SMTPTransport t = (SMTPTransport) session.getTransport("smtps");
+
+            // connect
+            t.connect("smtp.gmail.com", USERNAME, PASSWORD);
+            t.sendMessage(message, message.getAllRecipients());
+
+        } catch (MessagingException e) {
             e.printStackTrace();
         }
     }
