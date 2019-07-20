@@ -1,17 +1,12 @@
 package com.tuan.exercise.grader.mail;
 
-import java.io.DataInputStream;
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.Properties;
 import java.util.regex.Pattern;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipInputStream;
 
 import javax.mail.Address;
 import javax.mail.BodyPart;
@@ -35,6 +30,7 @@ public class MailHandler {
 
     private final String username;
     private final String password;
+    private Session mailSession;
 
     public MailHandler(String username, String password) {
         this.username = username;
@@ -47,9 +43,13 @@ public class MailHandler {
         props.put("mail.imap.host", Constant.Mail.IMAP_HOST);
         props.put("mail.imap.port", Constant.Mail.IMAP_PORT);
         props.put("mail.imap.starttls.enable", "true");
+        props.put("mail.smtp.host", Constant.Mail.SMTP_HOST);
+        props.put("mail.smtp.port", Constant.Mail.SMTP_PORT);
+        props.put("mail.smtp.auth", "true");
+        props.put("mail.smtp.starttls.enable", "true");
 
         // get session and connect to store
-        Session mailSession = Session.getDefaultInstance(props);
+        mailSession = Session.getDefaultInstance(props);
         Store store = mailSession.getStore();
         store.connect(Constant.Mail.IMAP_HOST, this.username, this.password);
 
@@ -76,108 +76,50 @@ public class MailHandler {
             }
 
             String from = ((InternetAddress) froms[0]).getAddress();
-            this.downloadAttachments(msg, from, Constant.IO.ZIP_EXT, destDirName);
+            int downCount = downloadAttachments(msg, from, Constant.IO.ZIP_EXT, destDirName);
+            if (downCount == 0) {
+                sendReply(mailSession, msg, "You haven't attach any zip file, yet!");
+            }
         }
 
         inbox.close(false);
     }
 
-    private void downloadAttachments(Message msg, String from, String ext, String destDirName)
-            throws IOException, MessagingException {
+    private int downloadAttachments(Message msg, String from, String ext, String destDirName) {
+        int downCount = 0;
+        try {
+            Multipart mp = (Multipart) msg.getContent();
+            for (int i = 0; i < mp.getCount(); i++) {
+                BodyPart bodyPart = mp.getBodyPart(i);
 
-        Multipart mp = (Multipart) msg.getContent();
-        for (int i = 0; i < mp.getCount(); i++) {
-            BodyPart bodyPart = mp.getBodyPart(i);
+                // dealing with attachments only
+                if (Part.ATTACHMENT.equalsIgnoreCase(bodyPart.getDisposition()) && bodyPart.getFileName() != null) {
+                    String fileFullname = bodyPart.getFileName();
+                    int dotInd = fileFullname.lastIndexOf('.');
+                    if (dotInd < 0 || !ext.equals(fileFullname.substring(dotInd)))
+                        continue;
 
-            // dealing with attachments only
-            if (Part.ATTACHMENT.equalsIgnoreCase(bodyPart.getDisposition()) && bodyPart.getFileName() != null) {
-                String fileFullname = bodyPart.getFileName();
-                int dotInd = fileFullname.lastIndexOf('.');
-                if (dotInd < 0 || !ext.equals(fileFullname.substring(dotInd)))
-                    continue;
-
-                String savedFileName = String.format("%s-%s", from, fileFullname);
-                File download = new File(String.format("%s%s%s", destDirName, File.separator, savedFileName));
-                InputStream netIn = bodyPart.getInputStream();
-                try (OutputStream fileOut = new FileOutputStream(download)) {
-                    byte[] buf = new byte[Constant.IO.NET_BUF];
-                    int bytesRead;
-                    while ((bytesRead = netIn.read(buf)) > 0) {
-                        fileOut.write(buf, 0, bytesRead);
-                    }
-                }
-            }
-        }
-    }
-
-    public void extractAll(String srcBaseDir, String destBaseDir) {
-        File srcDir = new File(srcBaseDir);
-        if (!srcDir.exists())
-            return;
-
-        File destDir = new File(destBaseDir);
-        if (!destDir.exists())
-            destDir.mkdirs();
-
-        // iterate through all files in the source directory
-        File[] compressedFiles = srcDir.listFiles();
-        for (File compFile : compressedFiles) {
-            extractSingle(compFile, destBaseDir);
-        }
-    }
-
-    private void extractSingle(File compFile, String destBaseDir) {
-        // test if file is compressed type
-        try (DataInputStream zipTestIn = new DataInputStream(new FileInputStream(compFile))) {
-            if (zipTestIn.readInt() != Constant.IO.ZIP_MAGIC)
-                return;
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-
-        String compFileFullname = compFile.getName();
-        String destDirPath = new StringBuilder()
-                .append(destBaseDir).append(File.separator)
-                .append(compFileFullname.substring(0, compFileFullname.indexOf('-')))
-                .toString();
-
-        File destDir = new File(destDirPath);
-        if (!destDir.exists()) {
-            destDir.mkdirs();
-        }
-
-        try (InputStream zipIn = new FileInputStream(compFile)) {
-            ZipInputStream zis = new ZipInputStream(zipIn);
-            ZipEntry zipEntry;
-            byte[] buf = new byte[Constant.IO.FILE_BUF];
-            while ((zipEntry = zis.getNextEntry()) != null) {
-                File extracted = new File(new StringBuilder()
-                        .append(destDirPath).append(File.separator)
-                        .append(zipEntry.getName()).toString());
-
-                if (zipEntry.isDirectory()) {
-                    if (!extracted.exists())
-                        extracted.mkdirs();
-                } else {
-                    try (FileOutputStream fos = new FileOutputStream(extracted)) {
-                        int length;
-                        while ((length = zis.read(buf)) > 0) {
-                            fos.write(buf, 0, length);
+                    String savedFileName = String.format("%s-%s", from, fileFullname);
+                    File download = new File(String.format("%s%s%s", destDirName, File.separator, savedFileName));
+                    InputStream netIn = bodyPart.getInputStream();
+                    try (OutputStream fileOut = new FileOutputStream(download)) {
+                        byte[] buf = new byte[Constant.IO.NET_BUF];
+                        int bytesRead;
+                        while ((bytesRead = netIn.read(buf)) > 0) {
+                            fileOut.write(buf, 0, bytesRead);
                         }
                     }
+                    downCount++;
                 }
-                zis.closeEntry();
             }
-
-        } catch (FileNotFoundException e) {
-            e.printStackTrace();
-        } catch (IOException e) {
+            
+        } catch (IOException | MessagingException e) {
             e.printStackTrace();
         }
+        return downCount;
     }
 
     public void grade(String studentStorageDirName) {
-        String appName = "test_pkg.DemoApp";
         File baseDir = new File(studentStorageDirName);
         String[] studentDirNames = baseDir.list((file, fileName) -> file.isDirectory());
 
@@ -192,7 +134,7 @@ public class MailHandler {
                     .append("DemoApp.java").toString();
 
             Log.info("Marking " + studentAddr);
-            float grade = AnswerUtil.getGrade(answerFilePath, classpath, appName);
+            float grade = AnswerUtil.getGrade(answerFilePath, classpath, Constant.Grader.APP_NAME);
             Log.info("Sending grade to " + studentAddr);
             sendResult(studentAddr, grade);
             Log.info("Fnished sending grade to " + studentAddr);
@@ -221,6 +163,23 @@ public class MailHandler {
 
             Transport.send(message);
 
+        } catch (MessagingException e) {
+            e.printStackTrace();
+        }
+    }
+    
+    private void sendReply(Session session, Message baseMessage, String content) {
+        try {
+            Message repMessage = baseMessage.reply(false);
+            repMessage.setFrom(new InternetAddress(this.username));
+            repMessage.setText(content);
+            repMessage.setReplyTo(baseMessage.getReplyTo());
+            
+            Transport transport = session.getTransport("smtp");
+            transport.connect(this.username, this.password);
+            transport.sendMessage(repMessage, repMessage.getAllRecipients());
+            Log.info("Finished replying");
+            
         } catch (MessagingException e) {
             e.printStackTrace();
         }

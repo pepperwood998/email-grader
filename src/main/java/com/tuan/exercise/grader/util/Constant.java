@@ -28,4 +28,11 @@ public class Constant {
         public static final int NET_BUF = 1024;
         public static final int FILE_BUF = 1024;
     }
+
+    public static class Grader {
+        private Grader() {
+        }
+
+        public static final String APP_NAME = "test_pkg.DemoApp";
+    }
 }

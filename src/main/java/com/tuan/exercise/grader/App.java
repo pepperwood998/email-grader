@@ -6,6 +6,7 @@ import javax.mail.MessagingException;
 import javax.mail.Store;
 
 import com.tuan.exercise.grader.mail.MailHandler;
+import com.tuan.exercise.grader.util.FileUtil;
 
 public class App {
 
@@ -24,7 +25,7 @@ public class App {
             Store store = mailHandler.connect();
 
             mailHandler.downloadInboxZips(store, subjectRegex, srcBaseDirName);
-            mailHandler.extractAll(srcBaseDirName, destBaseDirName);
+            FileUtil.extractAll(srcBaseDirName, destBaseDirName);
             mailHandler.grade(studentStorageDirName);
 
             store.close();
