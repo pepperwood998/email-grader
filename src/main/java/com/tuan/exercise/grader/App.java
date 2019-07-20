@@ -15,16 +15,17 @@ public class App {
     public static void main(String[] args) {
 
         String subjectRegex = "^ITLAB-HOMEWORK.*$";
-        String srcBaseDir = "./output/raw";
-        String destBaseDir = "./output/extracted";
+        String srcBaseDirName = "./output/raw";
+        String destBaseDirName = "./output/extracted";
+        String studentStorageDirName = "./output/extracted";
         MailHandler mailHandler = new MailHandler(USERNAME, TEST_PASS);
 
         try {
             Store store = mailHandler.connect();
 
-            mailHandler.downloadInboxZips(store, subjectRegex, srcBaseDir);
-            mailHandler.extractAll(srcBaseDir, destBaseDir);
-            mailHandler.grade();
+            mailHandler.downloadInboxZips(store, subjectRegex, srcBaseDirName);
+            mailHandler.extractAll(srcBaseDirName, destBaseDirName);
+            mailHandler.grade(studentStorageDirName);
 
             store.close();
         } catch (MessagingException e) {

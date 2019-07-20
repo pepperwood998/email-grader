@@ -137,8 +137,7 @@ public class MailHandler {
 
         String compFileFullname = compFile.getName();
         String destDirPath = new StringBuilder()
-                .append(destBaseDir)
-                .append(File.separator)
+                .append(destBaseDir).append(File.separator)
                 .append(compFileFullname.substring(0, compFileFullname.indexOf('-')))
                 .toString();
 
@@ -153,9 +152,9 @@ public class MailHandler {
             byte[] buf = new byte[Constant.IO.FILE_BUF];
             while ((zipEntry = zis.getNextEntry()) != null) {
                 File extracted = new File(new StringBuilder()
-                        .append(destDirPath)
-                        .append(File.separator)
+                        .append(destDirPath).append(File.separator)
                         .append(zipEntry.getName()).toString());
+
                 if (zipEntry.isDirectory()) {
                     if (!extracted.exists())
                         extracted.mkdirs();
@@ -177,18 +176,16 @@ public class MailHandler {
         }
     }
 
-    public void grade() {
-        String baseDirName = "./output/extracted";
+    public void grade(String studentStorageDirName) {
         String appName = "test_pkg.DemoApp";
-        File baseDir = new File(baseDirName);
+        File baseDir = new File(studentStorageDirName);
         String[] studentDirNames = baseDir.list((file, fileName) -> file.isDirectory());
 
         for (String studentAddr : studentDirNames) {
             String classpath = new StringBuilder()
-                    .append(baseDirName)
-                    .append(File.separator)
-                    .append(studentAddr)
-                    .toString();
+                    .append(studentStorageDirName).append(File.separator)
+                    .append(studentAddr).toString();
+
             String answerFilePath = new StringBuilder()
                     .append(classpath).append(File.separator)
                     .append("test_pkg").append(File.separator)
