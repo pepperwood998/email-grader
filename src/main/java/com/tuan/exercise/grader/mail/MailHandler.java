@@ -1,6 +1,5 @@
 package com.tuan.exercise.grader.mail;
 
-import java.io.BufferedReader;
 import java.io.DataInputStream;
 import java.io.File;
 import java.io.FileInputStream;
@@ -8,7 +7,6 @@ import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.util.Properties;
 import java.util.regex.Pattern;
@@ -22,43 +20,38 @@ import javax.mail.Message;
 import javax.mail.MessagingException;
 import javax.mail.Multipart;
 import javax.mail.Part;
+import javax.mail.PasswordAuthentication;
 import javax.mail.Session;
 import javax.mail.Store;
+import javax.mail.Transport;
 import javax.mail.internet.InternetAddress;
 import javax.mail.internet.MimeMessage;
 
-import com.sun.mail.smtp.SMTPTransport;
 import com.tuan.exercise.grader.util.AnswerUtil;
+import com.tuan.exercise.grader.util.Constant;
+import com.tuan.exercise.grader.util.Log;
 
 public class MailHandler {
 
-    private final String USERNAME;
-    private final String PASSWORD;
-
-    private static final String HOST = "imap.gmail.com";
-    private static final String STORE_TYPE = "imaps";
-    private static final String FOLDER_INBOX = "INBOX";
-    private static final String ZIP_EXT = ".zip";
-
-    private static final int NET_BUF = 1024;
-    private static final int FILE_BUF = 1024;
+    private final String username;
+    private final String password;
 
     public MailHandler(String username, String password) {
-        this.USERNAME = username;
-        this.PASSWORD = password;
+        this.username = username;
+        this.password = password;
     }
 
     public Store connect() throws MessagingException {
         Properties props = new Properties();
-        props.put("mail.store.protocol", STORE_TYPE);
-        props.put("mail.imap.host", HOST);
-        props.put("mail.imap.port", "993");
+        props.put("mail.store.protocol", Constant.Mail.IMAP_STORE_TYPE);
+        props.put("mail.imap.host", Constant.Mail.IMAP_HOST);
+        props.put("mail.imap.port", Constant.Mail.IMAP_PORT);
         props.put("mail.imap.starttls.enable", "true");
 
         // get session and connect to store
         Session mailSession = Session.getDefaultInstance(props);
         Store store = mailSession.getStore();
-        store.connect(HOST, this.USERNAME, this.PASSWORD);
+        store.connect(Constant.Mail.IMAP_HOST, this.username, this.password);
 
         return store;
     }
@@ -70,7 +63,7 @@ public class MailHandler {
             destDir.mkdirs();
         }
 
-        Folder inbox = store.getFolder(FOLDER_INBOX);
+        Folder inbox = store.getFolder(Constant.Mail.FOLDER_INBOX);
         inbox.open(Folder.READ_ONLY);
 
         Message[] msgArr = inbox.getMessages();
@@ -83,7 +76,7 @@ public class MailHandler {
             }
 
             String from = ((InternetAddress) froms[0]).getAddress();
-            this.downloadAttachments(msg, from, ZIP_EXT, destDirName);
+            this.downloadAttachments(msg, from, Constant.IO.ZIP_EXT, destDirName);
         }
 
         inbox.close(false);
@@ -107,7 +100,7 @@ public class MailHandler {
                 File download = new File(String.format("%s%s%s", destDirName, File.separator, savedFileName));
                 InputStream netIn = bodyPart.getInputStream();
                 try (OutputStream fileOut = new FileOutputStream(download)) {
-                    byte[] buf = new byte[NET_BUF];
+                    byte[] buf = new byte[Constant.IO.NET_BUF];
                     int bytesRead;
                     while ((bytesRead = netIn.read(buf)) > 0) {
                         fileOut.write(buf, 0, bytesRead);
@@ -136,7 +129,7 @@ public class MailHandler {
     private void extractSingle(File compFile, String destBaseDir) {
         // test if file is compressed type
         try (DataInputStream zipTestIn = new DataInputStream(new FileInputStream(compFile))) {
-            if (zipTestIn.readInt() != 0x504b0304)
+            if (zipTestIn.readInt() != Constant.IO.ZIP_MAGIC)
                 return;
         } catch (IOException e) {
             e.printStackTrace();
@@ -157,7 +150,7 @@ public class MailHandler {
         try (InputStream zipIn = new FileInputStream(compFile)) {
             ZipInputStream zis = new ZipInputStream(zipIn);
             ZipEntry zipEntry;
-            byte[] buf = new byte[FILE_BUF];
+            byte[] buf = new byte[Constant.IO.FILE_BUF];
             while ((zipEntry = zis.getNextEntry()) != null) {
                 File extracted = new File(new StringBuilder()
                         .append(destDirPath)
@@ -184,72 +177,52 @@ public class MailHandler {
         }
     }
 
-    public void grade() throws IOException {
-        int testCaseMonth = 2;
-        int testCaseyear = 2020;
+    public void grade() {
         String baseDirName = "./output/extracted";
-        String appName = "test_pkg/DemoApp";
+        String appName = "test_pkg.DemoApp";
         File baseDir = new File(baseDirName);
         String[] studentDirNames = baseDir.list((file, fileName) -> file.isDirectory());
 
         for (String studentAddr : studentDirNames) {
-            System.out.println("Marking " + studentAddr);
-            String classPath = new StringBuilder()
+            String classpath = new StringBuilder()
                     .append(baseDirName)
                     .append(File.separator)
-                    .append(studentAddr).toString();
+                    .append(studentAddr)
+                    .toString();
             String answerFilePath = new StringBuilder()
-                    .append(classPath)
-                    .append(File.separator)
-                    .append("test_pkg")
-                    .append(File.separator)
+                    .append(classpath).append(File.separator)
+                    .append("test_pkg").append(File.separator)
                     .append("DemoApp.java").toString();
-            
-            Process compileProc = Runtime.getRuntime().exec(String.format("javac %s", answerFilePath));
-            try {
-                int compileStat = compileProc.waitFor();
-                if (compileStat == 0) {
-                    Process runProc = Runtime.getRuntime().exec(String.format("java -cp %s %s %d %d",
-                            classPath, appName, testCaseMonth, testCaseyear));
 
-                    BufferedReader reader = new BufferedReader(new InputStreamReader(runProc.getInputStream()));
-                    String studentAns = reader.readLine();
-                    System.out.println("Finished marking " + studentAddr);
-                    int correctAns = AnswerUtil.getDays(testCaseMonth, testCaseyear);
-                    if (Integer.valueOf(studentAns) == correctAns) {
-                        sendResult(studentAddr, 10);
-                    } else {
-                        sendResult(studentAddr, 0);
-                    }
-                }
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
+            Log.info("Marking " + studentAddr);
+            float grade = AnswerUtil.getGrade(answerFilePath, classpath, appName);
+            Log.info("Sending grade to " + studentAddr);
+            sendResult(studentAddr, grade);
+            Log.info("Fnished sending grade to " + studentAddr);
         }
     }
 
-    private void sendResult(String studentAddr, int grade) {
+    private void sendResult(String studentAddr, float grade) {
         Properties props = System.getProperties();
-        props.setProperty("mail.smtp.host", "smtp.gmail.com");
+        props.put("mail.smtp.host", Constant.Mail.SMTP_HOST);
+        props.put("mail.smtp.port", Constant.Mail.SMTP_PORT);
         props.put("mail.smtp.auth", "true");
-        props.put("mail.smtp.port", "465");
         props.put("mail.smtp.starttls.enable", "true");
-        Session session = Session.getDefaultInstance(props);
+        Session session = Session.getInstance(props, new javax.mail.Authenticator() {
+            @Override
+            protected PasswordAuthentication getPasswordAuthentication() {
+                return new PasswordAuthentication(username, password);
+            }
+        });
 
         try {
             MimeMessage message = new MimeMessage(session);
-            message.setFrom(new InternetAddress(USERNAME));
-            message.addRecipient(Message.RecipientType.TO, new InternetAddress(studentAddr));
+            message.setFrom(new InternetAddress(username));
+            message.setRecipient(Message.RecipientType.TO, new InternetAddress(studentAddr));
             message.setSubject("Final Exam Grade");
-            message.setText(new StringBuilder()
-                    .append("Your mark: ")
-                    .append(grade).toString());
+            message.setText(new StringBuilder().append("Your grade: ").append(grade).toString());
 
-            SMTPTransport t = (SMTPTransport) session.getTransport("smtps");
-
-            // connect
-            t.connect("smtp.gmail.com", USERNAME, PASSWORD);
-            t.sendMessage(message, message.getAllRecipients());
+            Transport.send(message);
 
         } catch (MessagingException e) {
             e.printStackTrace();
