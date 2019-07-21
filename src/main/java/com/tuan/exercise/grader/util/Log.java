@@ -1,5 +1,6 @@
 package com.tuan.exercise.grader.util;
 
+import java.util.StringJoiner;
 import java.util.logging.ConsoleHandler;
 import java.util.logging.Formatter;
 import java.util.logging.Handler;
@@ -31,6 +32,15 @@ public class Log {
 
     public static void err(Exception e) {
         logger.log(Level.SEVERE, e.getMessage());
+    }
+    
+    public static void info(String... messages) {
+        StringJoiner joiner = new StringJoiner(" ");
+        for (String msg : messages) {
+            joiner.add(msg);
+        }
+        String msg = joiner.toString();
+        logger.log(Level.INFO, msg);
     }
 
     private static class SimpleLoggingFormatter extends Formatter {

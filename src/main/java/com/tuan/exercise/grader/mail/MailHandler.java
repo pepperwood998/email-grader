@@ -75,7 +75,9 @@ public class MailHandler {
             }
 
             String from = ((InternetAddress) froms[0]).getAddress();
+            Log.info("Downloading from", from);
             int downCount = downloadAttachments(msg, from, Constant.IO.ZIP_EXT, destDirName);
+            Log.info("Found", String.valueOf(downCount), "zip file(s)");
             if (downCount == 0) {
                 sendReply(mailSession, msg, "You haven't attach any zip file, yet!");
             }
@@ -134,13 +136,12 @@ public class MailHandler {
 
             Log.info("Marking " + studentAddr);
             float grade = AnswerUtil.getGrade(answerFilePath, classpath, Constant.Grader.APP_NAME);
-            Log.info("Sending grade to " + studentAddr);
             sendResult(studentAddr, grade);
-            Log.info("Fnished sending grade to " + studentAddr);
         }
     }
 
     private void sendResult(String studentAddr, float grade) {
+        Log.info("Sending grade to " + studentAddr);
         Properties props = System.getProperties();
         props.put("mail.smtp.host", Constant.Mail.SMTP_HOST);
         props.put("mail.smtp.port", Constant.Mail.SMTP_PORT);
@@ -161,6 +162,7 @@ public class MailHandler {
             message.setText(new StringBuilder().append("Your grade: ").append(grade).toString());
 
             Transport.send(message);
+            Log.info("Fnished sending grade to " + studentAddr);
 
         } catch (MessagingException e) {
             Log.err(e);
@@ -169,6 +171,7 @@ public class MailHandler {
     
     private void sendReply(Session session, Message baseMessage, String content) {
         try {
+            Log.info("Replying to", ((InternetAddress) baseMessage.getReplyTo()[0]).getAddress());
             Message repMessage = baseMessage.reply(false);
             repMessage.setFrom(new InternetAddress(this.username));
             repMessage.setText(content);
