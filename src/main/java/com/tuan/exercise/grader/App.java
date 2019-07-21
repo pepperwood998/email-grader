@@ -1,12 +1,11 @@
 package com.tuan.exercise.grader;
 
-import java.io.IOException;
-
 import javax.mail.MessagingException;
 import javax.mail.Store;
 
 import com.tuan.exercise.grader.mail.MailHandler;
 import com.tuan.exercise.grader.util.FileUtil;
+import com.tuan.exercise.grader.util.Log;
 
 public class App {
 
@@ -30,9 +29,7 @@ public class App {
 
             store.close();
         } catch (MessagingException e) {
-            e.printStackTrace();
-        } catch (IOException e) {
-            e.printStackTrace();
+            Log.err(e);
         }
     }
 }

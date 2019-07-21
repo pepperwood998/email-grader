@@ -56,8 +56,7 @@ public class MailHandler {
         return store;
     }
 
-    public void downloadInboxZips(Store store, String subjectRegex, String destDirName)
-            throws IOException, MessagingException {
+    public void downloadInboxZips(Store store, String subjectRegex, String destDirName) throws MessagingException {
         File destDir = new File(destDirName);
         if (!destDir.exists()) {
             destDir.mkdirs();
@@ -114,7 +113,7 @@ public class MailHandler {
             }
             
         } catch (IOException | MessagingException e) {
-            e.printStackTrace();
+            Log.err(e);
         }
         return downCount;
     }
@@ -164,7 +163,7 @@ public class MailHandler {
             Transport.send(message);
 
         } catch (MessagingException e) {
-            e.printStackTrace();
+            Log.err(e);
         }
     }
     
@@ -181,7 +180,7 @@ public class MailHandler {
             Log.info("Finished replying");
             
         } catch (MessagingException e) {
-            e.printStackTrace();
+            Log.err(e);
         }
     }
 }

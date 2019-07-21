@@ -72,9 +72,10 @@ public class AnswerUtil {
                 }
             }
         } catch (InterruptedException e) {
-            e.printStackTrace();
+            Log.err(e);
+            Thread.currentThread().interrupt();
         } catch (IOException e) {
-            e.printStackTrace();
+            Log.err(e);
         }
 
         return (passed / testCaseNum) * 10.0f;

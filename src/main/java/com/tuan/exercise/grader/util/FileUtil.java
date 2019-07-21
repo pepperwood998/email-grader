@@ -3,7 +3,6 @@ package com.tuan.exercise.grader.util;
 import java.io.DataInputStream;
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -36,7 +35,7 @@ public class FileUtil {
             if (zipTestIn.readInt() != Constant.IO.ZIP_MAGIC)
                 return;
         } catch (IOException e) {
-            e.printStackTrace();
+            Log.err(e);
         }
 
         String compFileFullname = compFile.getName();
@@ -73,10 +72,8 @@ public class FileUtil {
                 zis.closeEntry();
             }
 
-        } catch (FileNotFoundException e) {
-            e.printStackTrace();
         } catch (IOException e) {
-            e.printStackTrace();
+            Log.err(e);
         }
     }
 }

@@ -9,24 +9,28 @@ import java.util.logging.Logger;
 
 public class Log {
 
-    private static final Logger LOG;
+    private static final Logger logger;
 
     static {
-        LOG = Logger.getLogger(Log.class.getName());
+        logger = Logger.getLogger(Log.class.getName());
         Handler handler = new ConsoleHandler();
         handler.setLevel(Level.ALL);
         handler.setFormatter(new SimpleLoggingFormatter());
 
-        LOG.addHandler(handler);
-        LOG.setLevel(Level.ALL);
-        LOG.setUseParentHandlers(false);
+        logger.addHandler(handler);
+        logger.setLevel(Level.ALL);
+        logger.setUseParentHandlers(false);
     }
 
     private Log() {
     }
 
     public static void info(String msg) {
-        LOG.log(Level.INFO, msg);
+        logger.log(Level.INFO, msg);
+    }
+
+    public static void err(Exception e) {
+        logger.log(Level.SEVERE, e.getMessage());
     }
 
     private static class SimpleLoggingFormatter extends Formatter {
