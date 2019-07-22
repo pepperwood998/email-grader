@@ -23,13 +23,16 @@ public class App {
         try {
             Store store = mailHandler.connect();
 
+            long start = System.currentTimeMillis();
             mailHandler.downloadInboxZips(store, subjectRegex, srcBaseDirName);
             FileUtil.extractAll(srcBaseDirName, destBaseDirName);
             mailHandler.grade(studentStorageDirName);
+            long end = System.currentTimeMillis();
+            Log.info("Core Process Duration:", String.valueOf(end - start), "ms");
 
-            store.close();
         } catch (MessagingException e) {
             Log.err(e);
         }
+        mailHandler.waitForMailProc();
     }
 }

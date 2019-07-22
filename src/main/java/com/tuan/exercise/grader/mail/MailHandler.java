@@ -6,6 +6,9 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.Properties;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
 import javax.mail.Address;
@@ -27,10 +30,13 @@ import com.tuan.exercise.grader.util.Constant;
 import com.tuan.exercise.grader.util.Log;
 
 public class MailHandler {
+    
+    private static final ExecutorService EXECUTOR = Executors.newFixedThreadPool(3);
 
     private final String username;
     private final String password;
     private Session mailSession;
+    private Store store;
 
     public MailHandler(String username, String password) {
         this.username = username;
@@ -50,7 +56,7 @@ public class MailHandler {
 
         // get session and connect to store
         mailSession = Session.getDefaultInstance(props);
-        Store store = mailSession.getStore();
+        store = mailSession.getStore();
         store.connect(Constant.Mail.IMAP_HOST, this.username, this.password);
 
         return store;
@@ -79,11 +85,9 @@ public class MailHandler {
             int downCount = downloadAttachments(msg, from, Constant.IO.ZIP_EXT, destDirName);
             Log.info("Found", String.valueOf(downCount), "zip file(s)");
             if (downCount == 0) {
-                sendReply(mailSession, msg, "You haven't attach any zip file, yet!");
+                EXECUTOR.execute(() -> sendReply(mailSession, msg, "You haven't attach any zip file, yet!"));
             }
         }
-
-        inbox.close(false);
     }
 
     private int downloadAttachments(Message msg, String from, String ext, String destDirName) {
@@ -136,7 +140,7 @@ public class MailHandler {
 
             Log.info("Marking " + studentAddr);
             float grade = AnswerUtil.getGrade(answerFilePath, classpath, Constant.Grader.APP_NAME);
-            sendResult(studentAddr, grade);
+            EXECUTOR.execute(() -> sendResult(studentAddr, grade));
         }
     }
 
@@ -168,7 +172,7 @@ public class MailHandler {
             Log.err(e);
         }
     }
-    
+
     private void sendReply(Session session, Message baseMessage, String content) {
         try {
             Log.info("Replying to", ((InternetAddress) baseMessage.getReplyTo()[0]).getAddress());
@@ -182,6 +186,22 @@ public class MailHandler {
             transport.sendMessage(repMessage, repMessage.getAllRecipients());
             Log.info("Finished replying");
             
+        } catch (MessagingException e) {
+            Log.err(e);
+        }
+    }
+
+    public void waitForMailProc() {
+        EXECUTOR.shutdown();
+        try {
+            while (!EXECUTOR.awaitTermination(30L, TimeUnit.MINUTES))
+                ;
+            Log.info("Cleaning Up");
+            store.close();
+            Log.info("Finished All Mailing Operation");
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            Log.err(e);
         } catch (MessagingException e) {
             Log.err(e);
         }
